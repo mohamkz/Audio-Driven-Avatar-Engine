@@ -53,10 +53,32 @@ def extract_lip_coordinates(video_path, landmarker):
     cap.release()
     return np.array(lip_coords)
 
-def extract_audio_features(video_path, device="cpu"):
+def extract_audio_features(video_path, device="cuda", chunk_duration_sec=30):
     processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
     model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base-960h").to(device)
-    speech, _ = librosa.load(video_path, sr=16000)
-    inputs = processor(speech, return_tensors="pt", sampling_rate=16000).input_values.to(device)
-    with torch.no_grad():
-        return model(inputs).last_hidden_state.squeeze().cpu().numpy()
+
+    print("Loading raw audio into memory...")
+    speech, sr = librosa.load(video_path, sr=16000)
+
+    chunk_size = chunk_duration_sec * sr 
+    all_features = []
+
+    total_chunks = (len(speech) // chunk_size) + 1
+    print(f"Splitting audio into {total_chunks} chunks")
+
+    for i in range(0, len(speech), chunk_size):
+        chunk = speech[i : i + chunk_size]
+        if len(chunk) == 0:
+            break
+            
+        inputs = processor(chunk, return_tensors="pt", sampling_rate=sr).input_values.to(device)
+        
+        with torch.no_grad():
+            features = model(inputs).last_hidden_state.squeeze().cpu().numpy()
+            if features.ndim == 1:
+                features = np.expand_dims(features, axis=0)
+            all_features.append(features)
+        
+        print(f"Processed audio chunk {(i // chunk_size) + 1} of {total_chunks}")
+
+    return np.concatenate(all_features, axis=0)

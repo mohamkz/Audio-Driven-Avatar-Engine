@@ -11,7 +11,7 @@ load_dotenv()
 
 os.makedirs("data", exist_ok=True)
 
-video_input = "data/test_video.mp4"
+video_input = "data/full_podcast.mp4"
 audio_output = "data/X_audio_data.npy"
 lip_output = "data/Y_lip_data.npy"
 
@@ -28,8 +28,8 @@ def run():
     np.save(lip_output, y_data)
     print(f"Saved visuals: {y_data.shape}")
 
-    print("Extracting Audio Features (CPU)...")
-    x_data = extract_audio_features(video_input, device="cpu")
+    print("Extracting Audio Features (CUDA)...")
+    x_data = extract_audio_features(video_input, device="cuda")
     np.save(audio_output, x_data)
     print(f"Saved audio: {x_data.shape}")
 
