@@ -19,14 +19,18 @@ def get_mediapipe_landmarker(model_path="face_landmarker.task"):
         urllib.request.urlretrieve(url, model_path)
         print("Download complete.")
 
-    base_options = python.BaseOptions(model_asset_path=model_path)
+    base_options = python.BaseOptions(
+        model_asset_path=model_path,
+        delegate=python.BaseOptions.Delegate.CPU
+    )
+    
     options = vision.FaceLandmarkerOptions(
         base_options=base_options,
         running_mode=vision.RunningMode.VIDEO,
         num_faces=1
     )
     return vision.FaceLandmarker.create_from_options(options)
-
+    
 def extract_lip_coordinates(video_path, landmarker):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -49,6 +53,9 @@ def extract_lip_coordinates(video_path, landmarker):
             last_known = current
         else:
             lip_coords.append(last_known)
+
+        if frame_idx % 500 == 0:
+            print(f"--- Extracted landmarks for frame {frame_idx} ---")
         frame_idx += 1
     cap.release()
     return np.array(lip_coords)

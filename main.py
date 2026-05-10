@@ -1,12 +1,16 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
+from tqdm import tqdm
 
 from src.dataset import LipSyncDataset
 from src.model import SimpleLipSyncModel
 
 def train_pipeline(audio_npy, lip_npy, epochs=500, batch_size=16):
+    os.makedirs("models", exist_ok=True)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training moving to: {device}")
@@ -23,24 +27,39 @@ def train_pipeline(audio_npy, lip_npy, epochs=500, batch_size=16):
     
     for epoch in range(epochs):
         epoch_loss = 0
-        for x, y in loader:
+        
+        loop = tqdm(loader, desc=f"Epoch {epoch:03d}/{epochs}", leave=False)
+        
+        for x, y in loop:
             x, y = x.to(device), y.to(device)
             
             optimizer.zero_grad()
+            
             prediction = model(x)
+            prediction = prediction.transpose(1, 2)
+            prediction = F.interpolate(prediction, size=y.shape[1], mode='linear', align_corners=False)
+            prediction = prediction.transpose(1, 2)
+
             loss = criterion(prediction, y)
             
             loss.backward()
             optimizer.step()
             
             epoch_loss += loss.item()
+            
+            loop.set_postfix(loss=loss.item())
         
-        if epoch % 50 == 0:
-            avg_loss = epoch_loss / len(loader)
-            print(f"Epoch {epoch:03d} | Average MSE Loss: {avg_loss:.6f}")
+        avg_loss = epoch_loss / len(loader)
+        
+        print(f"Epoch {epoch:03d} Completed | Average MSE Loss: {avg_loss:.6f}")
 
-    torch.save(model.state_dict(), "models/weights.pth")
-    print("Training complete. Weights saved to models/weights.pth")
+        if epoch % 50 == 0 and epoch > 0:
+            checkpoint_path = f"models/weights_epoch_{epoch}.pth"
+            torch.save(model.state_dict(), checkpoint_path)
+            print(f"--- Safety Checkpoint Saved: {checkpoint_path} ---")
+
+    torch.save(model.state_dict(), "models/weights_final.pth")
+    print("Training complete. Final weights saved to models/weights_final.pth")
 
 if __name__ == "__main__":
     train_pipeline(
